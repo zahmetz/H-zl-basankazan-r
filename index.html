@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Buzzer Arena - Hızlı Basan Kazanır</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+    * { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; user-select: none; }
+    body { background-color: #0f172a; color: #f8fafc; overflow-x: hidden; }
+    .buzzer-btn { transition: transform 0.06s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s ease; }
+    .buzzer-btn:active:not(:disabled) { transform: scale(0.92); }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.7; }
+      70% { transform: scale(1.06); opacity: 0; }
+      100% { transform: scale(1.06); opacity: 0; }
+    }
+    .animate-ring { animation: pulse-ring 1.5s infinite; }
+    .glass { background: rgba(30, 41, 59, 0.78); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Üst Bilgi Çubuğu -->
+  <header class="glass sticky top-0 z-30 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+        <i class="fa-solid fa-bolt text-white text-lg"></i>
+      </div>
+      <div>
+        <h1 class="font-extrabold text-base tracking-tight leading-none">BUZZER ARENA</h1>
+        <span id="connStatusText" class="text-[11px] text-emerald-400 font-medium flex items-center gap-1 mt-0.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span> Hazır
+        </span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button onclick="toggleSound()" id="soundBtn" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 border border-slate-700" title="Sesi Aç/Kapat">
+        <i class="fa-solid fa-volume-high text-sm"></i>
+      </button>
+      <button onclick="openSetupModal()" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-amber-400 border border-slate-700" title="Çok Oyunculu Firebase Ayarı">
+        <i class="fa-solid fa-gear text-sm"></i>
+      </button>
+      <button onclick="leaveRoom()" id="leaveBtn" class="hidden px-3 h-9 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 text-xs font-bold border border-rose-500/30">
+        Çıkış
+      </button>
+    </div>
+  </header>
+
+  <!-- ANA İÇERİK ALANI -->
+  <main class="flex-1 flex flex-col max-w-2xl w-full mx-auto p-4">
+
+    <!-- 1. GİRİŞ EKRANI -->
+    <section id="lobbyView" class="flex-1 flex flex-col justify-center gap-5 my-auto py-4">
+      <div class="text-center space-y-2 mb-2">
+        <span class="inline-block px-3 py-1 rounded-full bg-indigo-500/15 text-indigo-300 text-xs font-bold border border-indigo-500/30">
+          Ultra Düşük Gecikmeli • 4 Şıklı Genel Kültür
+        </span>
+        <h2 class="text-3xl font-black tracking-tight">Kim Daha Hızlı?</h2>
+        <p class="text-slate-400 text-sm">Hakem olarak oda kur veya arkadaşının oda kodunu girerek yarışmaya katıl.</p>
+      </div>
+
+      <!-- Mod Bilgisi -->
+      <div id="modeBanner" class="glass rounded-2xl p-3.5 flex items-center justify-between gap-3 border-l-4 border-l-amber-400">
+        <div class="text-xs">
+          <p class="font-bold text-amber-300" id="modeTitle">Tek Cihaz / Hızlı Başlangıç Modu</p>
+          <p class="text-slate-400 mt-0.5" id="modeDesc">Telefonlar arası canlı bağlantı için sağ üstteki dişli (⚙️) ikonundan ücretsiz Firebase kodunu yapıştırabilirsin.</p>
+        </div>
+        <button onclick="openSetupModal()" class="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-bold hover:bg-amber-500/30">
+          Bağla
+        </button>
+      </div>
+
+      <!-- İsim Girişi -->
+      <div class="glass rounded-2xl p-4 space-y-3">
+        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider">Adın / Takma Adın</label>
+        <input id="playerNameInput" type="text" maxlength="18" placeholder="Örn: Ahmet"
+          class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-3.5 text-white font-semibold focus:outline-none focus:border-indigo-500" />
+      </div>
+
+      <!-- Hakem veya Oyuncu Seçimi -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="glass rounded-2xl p-5 flex flex-col justify-between gap-4 border-t-2 border-t-indigo-500">
+          <div>
+            <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center mb-3">
+              <i class="fa-solid fa-crown text-lg"></i>
+            </div>
+            <h3 class="font-extrabold text-lg">Hakem Ol</h3>
+            <p class="text-xs text-slate-400 mt-1">Oda kur, 4 şıklı genel kültür sorularını yönet, buton kilidini aç ve puanları ver.</p>
+          </div>
+          <button onclick="createRoom()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 font-extrabold text-sm shadow-lg shadow-indigo-600/30">
+            Oda Oluştur
+          </button>
+        </div>
+
+        <div class="glass rounded-2xl p-5 flex flex-col justify-between gap-4 border-t-2 border-t-emerald-500">
+          <div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-3">
+              <i class="fa-solid fa-hand-pointer text-lg"></i>
+            </div>
+            <h3 class="font-extrabold text-lg">Oyuncu Ol</h3>
+            <p class="text-xs text-slate-400 mt-1 mb-3">Hakemin ekranındaki 4 haneli kodu gir.</p>
+            <input id="roomCodeInput" type="tel" maxlength="4" placeholder="Oda Kodu (Örn: 4829)"
+              class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-center text-lg font-black tracking-[0.25em] text-emerald-400 focus:outline-none focus:border-emerald-500" />
+          </div>
+          <button onclick="joinRoom()" class="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-extrabold text-sm shadow-lg shadow-emerald-600/30">
+            Odaya Katıl
+          </button>
+        </div>
+      </div>
+
+      <div class="text-center text-xs text-slate-500 pt-2">
+        <i class="fa-solid fa-mobile-screen-button mr-1"></i>
+        Tarayıcı menüsünden <b>"Ana Ekrana Ekle"</b> diyerek tam ekran uygulama gibi kullanabilirsin.
+      </div>
+    </section>
+
+    <!-- 2. HAKEM EKRANI -->
+    <section id="hostView" class="hidden flex-1 flex-col gap-4 pb-6">
+      <!-- Oda Kodu & Kontrol Üst Kartı -->
+      <div class="glass rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <span class="text-[11px] font-bold text-slate-400 uppercase">Oda Kodu</span>
+          <div class="flex items-center gap-2">
+            <span id="displayRoomCode" class="text-3xl font-black tracking-widest text-indigo-400">----</span>
+            <button onclick="copyRoomCode()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300">
+              <i class="fa-regular fa-copy"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="toggleLockBtn" onclick="toggleBuzzerLock()" class="px-5 py-3.5 rounded-xl font-black text-sm shadow-lg transition flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white">
+            <i class="fa-solid fa-lock-open"></i> <span>KİLİDİ AÇ (BAŞLAT)</span>
+          </button>
+          <button onclick="resetRound()" class="px-4 py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 font-bold text-sm text-slate-200 border border-slate-700" title="Turu Sıfırla ve Kilitle">
+            <i class="fa-solid fa-rotate-right"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Basım Sıralaması (Kim İlk Bastı?) -->
+      <div class="glass rounded-2xl p-4 border border-amber-500/25">
+        <div class="flex items-center justify-between mb-2.5">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+            <i class="fa-solid fa-stopwatch text-amber-400"></i> Basım Sıralaması (Canlı)
+          </h3>
+          <span id="roundStatusBadge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300">
+            Butonlar Kilitli
+          </span>
+        </div>
+        <div id="buzzList" class="space-y-2">
+          <p class="text-xs text-slate-500 text-center py-3">Soruyu okuduktan sonra <b>Kilidi Aç</b> butonuna bas. İlk basan burada görünecek.</p>
+        </div>
+      </div>
+
+      <!-- 4 Şıklı Genel Kültür Soru Kartı -->
+      <div class="glass rounded-2xl p-4 space-y-3 border border-indigo-500/20">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <select id="categorySelect" onchange="filterQuestions()" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-indigo-300 focus:outline-none">
+              <option value="ALL">Tüm Kategoriler</option>
+              <option value="Tarih">Tarih</option>
+              <option value="Coğrafya">Coğrafya</option>
+              <option value="Bilim">Bilim & Teknoloji</option>
+              <option value="Kültür">Sinema & Kültür</option>
+              <option value="Spor">Spor</option>
+              <option value="Özel">Özel Sorularım</option>
+            </select>
+            <button onclick="toggleHighlightAnswer()" id="highlightBtn" class="px-2.5 py-1.5 rounded-lg bg-slate-800 text-xs font-semibold text-slate-300 border border-slate-700">
+              <i class="fa-solid fa-eye"></i> Cevap Açık
+            </button>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="openAddQuestionModal()" class="px-2.5 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 text-xs font-bold">
+              + Soru Ekle
+            </button>
+            <button onclick="nextQuestion()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">
+              Sonraki Soru <i class="fa-solid fa-arrow-right ml-1"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-slate-900/80 rounded-xl p-4 border border-slate-800 space-y-3">
+          <div class="flex items-center justify-between text-[11px] font-bold text-slate-400">
+            <span id="qCategoryBadge" class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">Tarih</span>
+            <span id="qCounterText">1 / 40</span>
+          </div>
+          <p id="qText" class="text-base sm:text-lg font-extrabold leading-snug text-white">Soru yükleniyor...</p>
+          <div id="qOptionsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1"></div>
+          <div id="qAnswerBanner" class="pt-1 flex items-center justify-between text-xs font-bold text-emerald-400">
+            <span><i class="fa-solid fa-circle-check mr-1"></i> Doğru Cevap: <span id="qCorrectText">-</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Oyuncular & Puan Tablosu -->
+      <div class="glass rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+            <i class="fa-solid fa-users mr-1 text-indigo-400"></i> Yarışmacılar & Puanlar
+          </h3>
+          <button onclick="addLocalTestPlayer()" id="addTestPlayerBtn" class="text-xs font-bold text-indigo-400 hover:underline">
+            + Test Oyuncusu Ekle
+          </button>
+        </div>
+        <div id="playersScoreList" class="space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- 3. OYUNCU EKRANI -->
+    <section id="playerView" class="hidden flex-1 flex-col justify-between gap-4 py-2">
+      <div class="glass rounded-2xl p-4 flex items-center justify-between">
+        <div>
+          <span class="text-[11px] font-bold text-slate-400">YARIŞMACI</span>
+          <h2 id="playerDisplayName" class="text-lg font-black text-white">-</h2>
+        </div>
+        <div class="text-right">
+          <span class="text-[11px] font-bold text-slate-400">PUANIN</span>
+          <p id="playerDisplayScore" class="text-2xl font-black text-amber-400">0</p>
+        </div>
+      </div>
+
+      <!-- DEV BUZZER BUTONU -->
+      <div class="flex-1 flex flex-col items-center justify-center my-2">
+        <div class="relative flex items-center justify-center">
+          <div id="buzzerRing" class="hidden absolute w-64 h-64 sm:w-72 sm:h-72 rounded-full bg-emerald-500/30 animate-ring pointer-events-none"></div>
+          <button id="mainBuzzerBtn" onpointerdown="pressBuzzer()" disabled
+            class="buzzer-btn relative w-60 h-60 sm:w-68 sm:h-68 rounded-full bg-rose-600 border-8 border-rose-400/30 shadow-2xl flex flex-col items-center justify-center gap-2 text-white disabled:opacity-90">
+            <i id="buzzerIcon" class="fa-solid fa-lock text-5xl"></i>
+            <span id="buzzerLabel" class="text-2xl font-black tracking-wide">KİLİTLİ</span>
+            <span id="buzzerSubLabel" class="text-xs font-semibold text-white/80 px-4 text-center">Hakemin soruyu bitirmesini bekle</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Oyuncu Alt Sıralama Bilgisi -->
+      <div class="glass rounded-2xl p-4">
+        <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-2">Bu Turdaki Sıralama</h3>
+        <div id="playerBuzzStatus" class="text-sm text-slate-300 font-semibold">Henüz kimse basmadı.</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FIREBASE ÇOK OYUNCULU AYAR MODALI -->
+  <div id="setupModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-5 space-y-4 border border-slate-700">
+      <div class="flex items-center justify-between">
+        <h3 class="font-extrabold text-lg text-white">Gerçek Zamanlı Çok Oyunculu Ayarı</h3>
+        <button onclick="closeSetupModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <p class="text-xs text-slate-300 leading-relaxed">
+        Farklı telefonlardan anlık (0 gecikmeye yakın) bağlanmak için ücretsiz bir <b>Firebase Realtime Database</b> oluşturup <code class="text-amber-300">databaseURL</code> adresini aşağıya yapıştırman yeterlidir:
+      </p>
+      <ol class="text-xs text-slate-400 list-decimal list-inside space-y-1 bg-slate-900/80 p-3 rounded-xl">
+        <li><b>console.firebase.google.com</b> adresine gir ve yeni proje aç.</li>
+        <li>Sol menüden <b>Build &gt; Realtime Database</b> seç ve <b>Test Mode</b> ile başlat.</li>
+        <li>Oluşan <code class="text-emerald-400">https://...-default-rtdb.firebaseio.com</code> linkini aşağı yapıştır.</li>
+      </ol>
+      <input id="firebaseUrlInput" type="url" placeholder="https://proje-adi-default-rtdb.firebaseio.com"
+        class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-xs text-white focus:outline-none focus:border-indigo-500" />
+      <div class="flex gap-2">
+        <button onclick="saveFirebaseUrl()" class="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs">Kaydet ve Bağlan</button>
+        <button onclick="clearFirebaseUrl()" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 font-bold text-xs text-slate-300">Sıfırla</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÖZEL SORU EKLEME MODALI -->
+  <div id="addQuestionModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-5 space-y-3 border border-slate-700">
+      <div class="flex items-center justify-between">
+        <h3 class="font-extrabold text-base">4 Şıklı Özel Soru Ekle</h3>
+        <button onclick="closeAddQuestionModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <textarea id="newQText" rows="2" placeholder="Soruyu yaz..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white"></textarea>
+      <div class="grid grid-cols-2 gap-2">
+        <input id="optA" type="text" placeholder="A Şıkkı" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+        <input id="optB" type="text" placeholder="B Şıkkı" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+        <input id="optC" type="text" placeholder="C Şıkkı" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+        <input id="optD" type="text" placeholder="D Şıkkı" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+      </div>
+      <div class="flex items-center justify-between gap-2">
+        <label class="text-xs font-bold text-slate-400">Doğru Şık:</label>
+        <select id="newQCorrect" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold text-emerald-400">
+          <option value="0">A Şıkkı</option>
+          <option value="1">B Şıkkı</option>
+          <option value="2">C Şıkkı</option>
+          <option value="3">D Şıkkı</option>
+        </select>
+      </div>
+      <button onclick="saveCustomQuestion()" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-extrabold text-xs">Soruyu Kaydet</button>
+    </div>
+  </div>
+
+  <script>
+    // --- 40 ADET 4 ŞIKLI GENEL KÜLTÜR SORUSU ---
+    const DEFAULT_QUESTIONS = [
+      { cat: "Tarih", q: "İstanbul'un fethi hangi yılda gerçekleşmiştir?", opts: ["1451", "1453", "1461", "1481"], ans: 1 },
+      { cat: "Tarih", q: "Türkiye Cumhuriyeti'nin ilk Başbakanı kimdir?", opts: ["Fevzi Çakmak", "İsmet İnönü", "Celal Bayar", "Refik Saydam"], ans: 1 },
+      { cat: "Tarih", q: "Tarihte bilinen ilk yazılı antlaşma hangisidir?", opts: ["Kadeş Antlaşması", "Vestfalya Antlaşması", "Uşi Antlaşması", "Versay Antlaşması"], ans: 0 },
+      { cat: "Tarih", q: "Malazgirt Meydan Muharebesi hangi yılda yapılmıştır?", opts: ["1040", "1071", "1176", "1243"], ans: 1 },
+      { cat: "Tarih", q: "Orhun Yazıtları günümüzde hangi ülkenin sınırları içindedir?", opts: ["Kazakistan", "Özbekistan", "Moğolistan", "Kırgızistan"], ans: 2 },
+      { cat: "Tarih", q: "Osmanlı Devleti'nde ilk matbaa hangi padişah döneminde kurulmuştur?", opts: ["II. Mahmud", "III. Selim", "III. Ahmed", "Kanuni Sultan Süleyman"], ans: 2 },
+      { cat: "Tarih", q: "Fransız İhtilali hangi yılda başlamıştır?", opts: ["1776", "1789", "1815", "1848"], ans: 1 },
+      { cat: "Tarih", q: "TBMM hangi tarihte açılmıştır?", opts: ["19 Mayıs 1919", "23 Nisan 1920", "30 Ağustos 1922", "29 Ekim 1923"], ans: 1 },
+
+      { cat: "Coğrafya", q: "Türkiye'nin en yüksek dağı hangisidir?", opts: ["Erciyes Dağı", "Kaçkar Dağı", "Ağrı Dağı", "Süphan Dağı"], ans: 2 },
+      { cat: "Coğrafya", q: "Dünyanın en uzun nehri hangisidir?", opts: ["Amazon", "Nil", "Yangtze", "Mississippi"], ans: 1 },
+      { cat: "Coğrafya", q: "Yüzölçümü bakımından Türkiye'nin en büyük gölü hangisidir?", opts: ["Tuz Gölü", "Beyşehir Gölü", "Van Gölü", "Eğirdir Gölü"], ans: 2 },
+      { cat: "Coğrafya", q: "Avustralya'nın başkenti neresidir?", opts: ["Sidney", "Melbourne", "Canberra", "Perth"], ans: 2 },
+      { cat: "Coğrafya", q: "Türkiye'nin en fazla komşu ülkeye sınırı olan bölgesi hangisidir?", opts: ["Güneydoğu Anadolu", "Doğu Anadolu", "Karadeniz", "Marmara"], ans: 1 },
+      { cat: "Coğrafya", q: "Dünyanın en derin noktası olan Mariana Çukuru hangi okyanustadır?", opts: ["Atlas Okyanusu", "Hint Okyanusu", "Büyük Okyanus", "Arktik Okyanusu"], ans: 2 },
+      { cat: "Coğrafya", q: "Kanada'nın resmi başkenti hangi şehirdir?", opts: ["Toronto", "Vancouver", "Montreal", "Ottawa"], ans: 3 },
+      { cat: "Coğrafya", q: "Kızılırmak hangi denize dökülür?", opts: ["Ege Denizi", "Akdeniz", "Karadeniz", "Marmara Denizi"], ans: 2 },
+
+      { cat: "Bilim", q: "Periyodik tabloda 'Au' sembolü hangi elementi temsil eder?", opts: ["Gümüş", "Altın", "Alüminyum", "Bakır"], ans: 1 },
+      { cat: "Bilim", q: "Güneş sistemindeki en büyük gezegen hangisidir?", opts: ["Satürn", "Uranüs", "Jüpiter", "Neptün"], ans: 2 },
+      { cat: "Bilim", q: "Işık hızı saniyede yaklaşık kaç kilometredir?", opts: ["150.000 km", "300.000 km", "450.000 km", "600.000 km"], ans: 1 },
+      { cat: "Bilim", q: "İnsan vücudundaki en büyük organ hangisidir?", opts: ["Karaciğer", "Akciğer", "Deri", "Beyin"], ans: 2 },
+      { cat: "Bilim", q: "Penisilini keşfeden bilim insanı kimdir?", opts: ["Louis Pasteur", "Alexander Fleming", "Marie Curie", "Robert Koch"], ans: 1 },
+      { cat: "Bilim", q: "Ses dalgaları aşağıdakilerden hangisinde yayılmaz?", opts: ["Su", "Demir", "Hava", "Boşluk (Uzay)"], ans: 3 },
+      { cat: "Bilim", q: "DNA'nın çift sarmal yapısını keşfeden bilim insanları kimlerdir?", opts: ["Watson ve Crick", "Einstein ve Bohr", "Newton ve Leibniz", "Tesla ve Edison"], ans: 0 },
+      { cat: "Bilim", q: "Suyun deniz seviyesindeki kaynama noktası kaç Kelvin'dir?", opts: ["100 K", "273 K", "373 K", "473 K"], ans: 2 },
+
+      { cat: "Kültür", q: "Mona Lisa tablosu hangi müzede sergilenmektedir?", opts: ["British Museum", "Louvre Müzesi", "Prado Müzesi", "Uffizi Galerisi"], ans: 1 },
+      { cat: "Kültür", q: "'Suç ve Ceza' romanının yazarı kimdir?", opts: ["Lev Tolstoy", "Anton Çehov", "Fyodor Dostoyevski", "Nikolay Gogol"], ans: 2 },
+      { cat: "Kültür", q: "Nobel Edebiyat Ödülü'nü kazanan ilk Türk yazar kimdir?", opts: ["Yaşar Kemal", "Orhan Pamuk", "Aziz Nesin", "Sabahattin Ali"], ans: 1 },
+      { cat: "Kültür", q: "İstiklal Marşı'nın bestecisi kimdir?", opts: ["Mehmet Akif Ersoy", "Osman Zeki Üngör", "Cemal Reşit Rey", "Adnan Saygun"], ans: 1 },
+      { cat: "Kültür", q: "'Yüzüklerin Efendisi' serisinin yazarı kimdir?", opts: ["C.S. Lewis", "J.R.R. Tolkien", "George R.R. Martin", "J.K. Rowling"], ans: 1 },
+      { cat: "Kültür", q: "Ünlü 'Çığlık' (The Scream) tablosu hangi ressama aittir?", opts: ["Vincent van Gogh", "Edvard Munch", "Salvador Dali", "Pablo Picasso"], ans: 1 },
+      { cat: "Kültür", q: "Sinema tarihinin Oscar kazanan ilk Türk kökenli yönetmeni (yabancı film dalında) hangisidir?", opts: ["Nuri Bilge Ceylan", "Fatih Akın", "Ferzan Özpetek", "Yılmaz Güney"], ans: 0 },
+      { cat: "Kültür", q: "'İnce Memed' roman serisinin yazarı kimdir?", opts: ["Orhan Kemal", "Kemal Tahir", "Yaşar Kemal", "Fakir Baykurt"], ans: 2 },
+
+      { cat: "Spor", q: "FIFA Dünya Kupası'nı en çok kazanan ülke hangisidir?", opts: ["Almanya", "Arjantin", "İtalya", "Brezilya"], ans: 3 },
+      { cat: "Spor", q: "UEFA Kupası'nı ve UEFA Süper Kupası'nı kazanan ilk Türk futbol takımı hangisidir?", opts: ["Fenerbahçe", "Beşiktaş", "Galatasaray", "Trabzonspor"], ans: 2 },
+      { cat: "Spor", q: "Basketbolda bir takım sahada kaç oyuncuyla yer alır?", opts: ["5", "6", "7", "11"], ans: 0 },
+      { cat: "Spor", q: "Olimpiyat halkaları kaç tanedir?", opts: ["4", "5", "6", "7"], ans: 1 },
+      { cat: "Spor", q: "Teniste toprak kortta oynanan Grand Slam turnuvası hangisidir?", opts: ["Wimbledon", "US Open", "Roland Garros", "Australian Open"], ans: 2 },
+      { cat: "Spor", q: "100 metre dünya rekoru hangi atlete aittir?", opts: ["Tyson Gay", "Usain Bolt", "Yohan Blake", "Carl Lewis"], ans: 1 },
+      { cat: "Spor", q: "Voleybolda bir set (karar seti hariç) kaç sayıda biter?", opts: ["15", "21", "25", "30"], ans: 2 },
+      { cat: "Spor", q: "UEFA Şampiyonlar Ligi'ni en çok kazanan kulüp hangisidir?", opts: ["AC Milan", "Bayern Münih", "Liverpool", "Real Madrid"], ans: 3 }
+    ];
+
+    // --- UYGULAMA DURUMU ---
+    let soundEnabled = true;
+    let audioCtx = null;
+    let role = null;
+    let roomCode = null;
+    let myId = 'u_' + Math.random().toString(36).substring(2, 9);
+    let myName = '';
+    let firebaseUrl = localStorage.getItem('buzzer_firebase_url') || '';
+    let eventSource = null;
+    let pollTimer = null;
+    let serverTimeOffset = 0;
+
+    let questions = [...DEFAULT_QUESTIONS];
+    let filteredQuestions = [...questions];
+    let currentQIndex = 0;
+    let highlightAnswer = true;
+
+    let roomState = {
+      locked: true,
+      roundId: 1,
+      unlockedAt: 0,
+      players: {},
+      buzzes: {}
+    };
+
+    function normalizeBuzzes(rawBuzzes) {
+      if (!rawBuzzes) return {};
+      if (Array.isArray(rawBuzzes)) {
+        const map = {};
+        rawBuzzes.forEach(b => { if (b && b.id) map[b.id] = b; });
+        return map;
+      }
+      return rawBuzzes;
+    }
+
+    function getNow() {
+      return Date.now() + serverTimeOffset;
+    }
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) audioCtx = new AudioContext();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playSound(type) {
+      if (!soundEnabled) return;
+      initAudio();
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      const now = audioCtx.currentTime;
+
+      if (type === 'unlock') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
+        osc.start(now); osc.stop(now + 0.16);
+      } else if (type === 'buzz') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(740, now);
+        osc.frequency.setValueAtTime(980, now + 0.07);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.30);
+        osc.start(now); osc.stop(now + 0.30);
+      } else if (type === 'point') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.setValueAtTime(900, now + 0.1);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.start(now); osc.stop(now + 0.25);
+      }
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('soundBtn').innerHTML = soundEnabled
+        ? '<i class="fa-solid fa-volume-high text-sm"></i>'
+        : '<i class="fa-solid fa-volume-xmark text-sm text-rose-400"></i>';
+    }
+
+    function updateModeUI() {
+      const title = document.getElementById('modeTitle');
+      const desc = document.getElementById('modeDesc');
+      const status = document.getElementById('connStatusText');
+      if (firebaseUrl) {
+        title.textContent = 'Canlı Anlık Stream Modu Aktif';
+        title.className = 'font-bold text-emerald-400';
+        desc.textContent = 'Server-Sent Events ile milisaniyelik anlık senkronizasyon açık.';
+        document.getElementById('modeBanner').classList.replace('border-l-amber-400', 'border-l-emerald-400');
+        status.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span> Anlık Akış Bağlı';
+      } else {
+        title.textContent = 'Tek Cihaz / Hızlı Başlangıç Modu';
+        title.className = 'font-bold text-amber-300';
+        desc.textContent = 'Telefonlar arası canlı bağlantı için sağ üstteki ayar (⚙️) ikonundan Firebase linkini gir.';
+        status.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span> Yerel Mod';
+      }
+    }
+
+    async function syncServerClock() {
+      if (!firebaseUrl) return;
+      try {
+        const t0 = Date.now();
+        const res = await fetch(`${firebaseUrl.replace(/\/$/, '')}/.info/serverTimeOffset.json`);
+        if (res.ok) {
+          const offset = await res.json();
+          const t1 = Date.now();
+          if (typeof offset === 'number') {
+            serverTimeOffset = offset - Math.round((t1 - t0) / 2);
+          }
+        }
+      } catch (_) {}
+    }
+
+    async function patchRoom(partialObj) {
+      Object.assign(roomState, partialObj);
+      localStorage.setItem('buzzer_room_' + roomCode, JSON.stringify(roomState));
+      if (!firebaseUrl) return;
+      try {
+        await fetch(`${firebaseUrl.replace(/\/$/, '')}/rooms/${roomCode}.json`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(partialObj)
+        });
+      } catch (e) { console.error('Patch hatası:', e); }
+    }
+
+    async function pushFullRoomState() {
+      localStorage.setItem('buzzer_room_' + roomCode, JSON.stringify(roomState));
+      if (!firebaseUrl) return;
+      try {
+        await fetch(`${firebaseUrl.replace(/\/$/, '')}/rooms/${roomCode}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(roomState)
+        });
+      } catch (e) { console.error('Sync hatası:', e); }
+    }
+
+    function applyRemoteState(newState) {
+      if (!newState) return;
+      const prevLocked = roomState.locked;
+      const prevBuzzCount = Object.keys(roomState.buzzes || {}).length;
+
+      roomState = {
+        locked: newState.locked !== undefined ? newState.locked : true,
+        roundId: newState.roundId || 1,
+        unlockedAt: newState.unlockedAt || 0,
+        players: newState.players || {},
+        buzzes: normalizeBuzzes(newState.buzzes)
+      };
+
+      const newBuzzCount = Object.keys(roomState.buzzes).length;
+      if (prevLocked && !roomState.locked) playSound('unlock');
+      if (newBuzzCount > prevBuzzCount) playSound('buzz');
+
+      if (role === 'host') renderHostUI();
+      if (role === 'player') renderPlayerUI();
+    }
+
+    function startRealtimeStream() {
+      stopRealtimeStream();
+      if (!roomCode) return;
+
+      if (!firebaseUrl) {
+        window.addEventListener('storage', handleLocalStorageSync);
+        pollTimer = setInterval(() => {
+          const raw = localStorage.getItem('buzzer_room_' + roomCode);
+          if (raw) applyRemoteState(JSON.parse(raw));
+        }, 120);
+        return;
+      }
+
+      const streamUrl = `${firebaseUrl.replace(/\/$/, '')}/rooms/${roomCode}.json`;
+      try {
+        eventSource = new EventSource(streamUrl);
+        eventSource.addEventListener('put', (e) => {
+          const payload = JSON.parse(e.data);
+          if (payload.path === '/') {
+            applyRemoteState(payload.data);
+          } else {
+            applyDeltaPath(payload.path, payload.data);
+          }
+        });
+        eventSource.addEventListener('patch', (e) => {
+          const payload = JSON.parse(e.data);
+          if (payload.path === '/' && payload.data) {
+            const merged = { ...roomState, ...payload.data };
+            if (payload.data.buzzes !== undefined) merged.buzzes = normalizeBuzzes(payload.data.buzzes);
+            applyRemoteState(merged);
+          } else {
+            applyDeltaPath(payload.path, payload.data);
+          }
+        });
+      } catch (err) {
+        console.warn('SSE başlatılamadı, hızlı polling devreye giriyor:', err);
+      }
+
+      pollTimer = setInterval(async () => {
+        try {
+          const res = await fetch(streamUrl);
+          const data = await res.json();
+          if (data) applyRemoteState(data);
+        } catch (_) {}
+      }, 600);
+    }
+
+    function applyDeltaPath(path, data) {
+      const parts = path.split('/').filter(Boolean);
+      const next = {
+        locked: roomState.locked,
+        roundId: roomState.roundId,
+        unlockedAt: roomState.unlockedAt,
+        players: { ...roomState.players },
+        buzzes: { ...roomState.buzzes }
+      };
+
+      if (parts.length === 1) {
+        const key = parts[0];
+        if (key === 'buzzes') next.buzzes = normalizeBuzzes(data);
+        else if (key === 'players') next.players = data || {};
+        else next[key] = data;
+      } else if (parts.length === 2) {
+        const [section, subKey] = parts;
+        if (section === 'buzzes') {
+          if (data === null) delete next.buzzes[subKey];
+          else next.buzzes[subKey] = data;
+        } else if (section === 'players') {
+          if (data === null) delete next.players[subKey];
+          else next.players[subKey] = data;
+        }
+      } else if (parts.length === 3 && parts[0] === 'players') {
+        const [, pid, field] = parts;
+        if (next.players[pid]) next.players[pid] = { ...next.players[pid], [field]: data };
+      }
+
+      applyRemoteState(next);
+    }
+
+    function handleLocalStorageSync(e) {
+      if (e.key === 'buzzer_room_' + roomCode && e.newValue) {
+        applyRemoteState(JSON.parse(e.newValue));
+      }
+    }
+
+    function stopRealtimeStream() {
+      if (eventSource) { eventSource.close(); eventSource = null; }
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      window.removeEventListener('storage', handleLocalStorageSync);
+    }
+
+    async function createRoom() {
+      initAudio();
+      await syncServerClock();
+      myName = document.getElementById('playerNameInput').value.trim() || 'Hakem';
+      role = 'host';
+      roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+      roomState = { locked: true, roundId: 1, unlockedAt: 0, players: {}, buzzes: {} };
+
+      await pushFullRoomState();
+      showView('hostView');
+      document.getElementById('displayRoomCode').textContent = roomCode;
+      document.getElementById('addTestPlayerBtn').style.display = firebaseUrl ? 'none' : 'inline';
+      renderQuestion();
+      renderHostUI();
+      startRealtimeStream();
+    }
+
+    async function joinRoom() {
+      initAudio();
+      await syncServerClock();
+      myName = document.getElementById('playerNameInput').value.trim();
+      const code = document.getElementById('roomCodeInput').value.trim();
+      if (!myName) return alert('Lütfen adını yaz!');
+      if (code.length !== 4) return alert('4 haneli oda kodunu gir!');
+
+      roomCode = code;
+      role = 'player';
+
+      if (firebaseUrl) {
+        const base = firebaseUrl.replace(/\/$/, '');
+        const res = await fetch(`${base}/rooms/${roomCode}.json`);
+        const data = await res.json();
+        if (!data) return alert('Bu oda kodu bulunamadı! Hakemin odayı kurduğundan emin ol.');
+        roomState = {
+          locked: data.locked ?? true,
+          roundId: data.roundId || 1,
+          unlockedAt: data.unlockedAt || 0,
+          players: data.players || {},
+          buzzes: normalizeBuzzes(data.buzzes)
+        };
+        await fetch(`${base}/rooms/${roomCode}/players/${myId}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: myName, score: 0 })
+        });
+      } else {
+        const raw = localStorage.getItem('buzzer_room_' + roomCode);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          roomState = { ...parsed, buzzes: normalizeBuzzes(parsed.buzzes) };
+        }
+        roomState.players[myId] = { name: myName, score: 0 };
+        localStorage.setItem('buzzer_room_' + roomCode, JSON.stringify(roomState));
+      }
+
+      showView('playerView');
+      document.getElementById('playerDisplayName').textContent = myName;
+      renderPlayerUI();
+      startRealtimeStream();
+    }
+
+    function leaveRoom() {
+      stopRealtimeStream();
+      role = null;
+      roomCode = null;
+      showView('lobbyView');
+    }
+
+    function showView(viewId) {
+      ['lobbyView', 'hostView', 'playerView'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+        document.getElementById(id).classList.remove('flex');
+      });
+      document.getElementById(viewId).classList.remove('hidden');
+      document.getElementById(viewId).classList.add('flex');
+      document.getElementById('leaveBtn').classList.toggle('hidden', viewId === 'lobbyView');
+    }
+
+    async function toggleBuzzerLock() {
+      initAudio();
+      if (roomState.locked) {
+        const nextRound = (roomState.roundId || 1) + 1;
+        playSound('unlock');
+        renderHostUI();
+        await patchRoom({
+          locked: false,
+          roundId: nextRound,
+          unlockedAt: getNow(),
+          buzzes: {}
+        });
+      } else {
+        await patchRoom({ locked: true });
+      }
+      renderHostUI();
+    }
+
+    async function resetRound() {
+      const nextRound = (roomState.roundId || 1) + 1;
+      await patchRoom({
+        locked: true,
+        roundId: nextRound,
+        buzzes: {}
+      });
+      renderHostUI();
+    }
+
+    async function updateScore(pid, delta) {
+      if (!roomState.players[pid]) return;
+      const newScore = (roomState.players[pid].score || 0) + delta;
+      roomState.players[pid].score = newScore;
+      playSound('point');
+      renderHostUI();
+      localStorage.setItem('buzzer_room_' + roomCode, JSON.stringify(roomState));
+      if (firebaseUrl) {
+        await fetch(`${firebaseUrl.replace(/\/$/, '')}/rooms/${roomCode}/players/${pid}/score.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newScore)
+        });
+      }
+    }
+
+    function addLocalTestPlayer() {
+      const names = ['Emre', 'Zeynep', 'Burak', 'Elif', 'Mert'];
+      const id = 'bot_' + Math.random().toString(36).substring(2, 6);
+      const name = names[Object.keys(roomState.players).length % names.length];
+      roomState.players[id] = { name, score: 0 };
+      patchRoom({ players: roomState.players });
+      renderHostUI();
+    }
+
+    function simulateBotBuzz(pid) {
+      if (roomState.locked) return alert('Önce Kilidi Aç butonuna bas!');
+      if (roomState.buzzes[pid]) return;
+      roomState.buzzes[pid] = {
+        id: pid,
+        name: roomState.players[pid].name,
+        time: getNow()
+      };
+      playSound('buzz');
+      patchRoom({ buzzes: roomState.buzzes });
+      renderHostUI();
+    }
+
+    function renderHostUI() {
+      const lockBtn = document.getElementById('toggleLockBtn');
+      const badge = document.getElementById('roundStatusBadge');
+
+      if (roomState.locked) {
+        lockBtn.className = 'px-5 py-3.5 rounded-xl font-black text-sm shadow-lg transition flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white';
+        lockBtn.innerHTML = '<i class="fa-solid fa-lock-open"></i> <span>KİLİDİ AÇ (BAŞLAT)</span>';
+        badge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300';
+        badge.textContent = 'Butonlar Kilitli';
+      } else {
+        lockBtn.className = 'px-5 py-3.5 rounded-xl font-black text-sm shadow-lg transition flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white';
+        lockBtn.innerHTML = '<i class="fa-solid fa-lock"></i> <span>KİLİTLE</span>';
+        badge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300';
+        badge.textContent = 'Yarışma Aktif!';
+      }
+
+      const buzzList = document.getElementById('buzzList');
+      const sortedBuzzes = Object.values(roomState.buzzes || {}).sort((a, b) => a.time - b.time);
+
+      if (sortedBuzzes.length === 0) {
+        buzzList.innerHTML = `<p class="text-xs text-slate-500 text-center py-3">${roomState.locked ? 'Soruyu okuduktan sonra <b>Kilidi Aç</b> butonuna bas.' : 'Oyuncuların basması bekleniyor...'}</p>`;
+      } else {
+        const firstTime = sortedBuzzes[0].time;
+        buzzList.innerHTML = sortedBuzzes.map((b, idx) => {
+          const reactionSec = Math.max(0, (b.time - (roomState.unlockedAt || firstTime)) / 1000).toFixed(2);
+          const diffSec = Math.max(0, (b.time - firstTime) / 1000).toFixed(2);
+          const isFirst = idx === 0;
+          return `
+            <div class="flex items-center justify-between p-3 rounded-xl ${isFirst ? 'bg-emerald-500/20 border border-emerald-500/50 shadow-md shadow-emerald-500/10' : 'bg-slate-900/85 border border-slate-800'}">
+              <div class="flex items-center gap-3">
+                <span class="w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs ${isFirst ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300'}">${idx + 1}</span>
+                <div>
+                  <p class="font-extrabold text-sm ${isFirst ? 'text-emerald-300' : 'text-white'}">${b.name} ${isFirst ? '👑' : ''}</p>
+                  <p class="text-[11px] text-slate-400">${isFirst ? `Tepki süresi: ${reactionSec} sn` : `+${diffSec} sn sonra bastı`}</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button onclick="updateScore('${b.id}', 10)" class="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 text-xs font-bold">+10</button>
+                <button onclick="updateScore('${b.id}', -5)" class="px-2.5 py-1 rounded-lg bg-rose-600/30 hover:bg-rose-600/50 text-rose-300 text-xs font-bold">-5</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      const scoreList = document.getElementById('playersScoreList');
+      const entries = Object.entries(roomState.players || {}).sort((a, b) => (b[1].score || 0) - (a[1].score || 0));
+      if (entries.length === 0) {
+        scoreList.innerHTML = `<p class="text-xs text-slate-500 text-center py-2">Henüz odaya katılan oyuncu yok. Oda kodunu paylaş: <b>${roomCode}</b></p>`;
+      } else {
+        scoreList.innerHTML = entries.map(([pid, p]) => `
+          <div class="flex items-center justify-between bg-slate-900/70 px-3.5 py-2.5 rounded-xl border border-slate-800">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-sm text-white">${p.name}</span>
+              ${pid.startsWith('bot_') ? `<button onclick="simulateBotBuzz('${pid}')" class="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold">Bastır</button>` : ''}
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="updateScore('${pid}', -5)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-rose-400 text-xs font-bold">-5</button>
+              <span class="w-10 text-center font-black text-amber-400 text-sm">${p.score || 0}</span>
+              <button onclick="updateScore('${pid}', 10)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold">+10</button>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    async function pressBuzzer() {
+      initAudio();
+      if (roomState.locked) return;
+      if (roomState.buzzes[myId]) return;
+
+      const buzzObj = { id: myId, name: myName, time: getNow() };
+      roomState.buzzes[myId] = buzzObj;
+      playSound('buzz');
+      if (navigator.vibrate) navigator.vibrate(100);
+      renderPlayerUI();
+
+      if (firebaseUrl) {
+        try {
+          await fetch(`${firebaseUrl.replace(/\/$/, '')}/rooms/${roomCode}/buzzes/${myId}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buzzObj)
+          });
+        } catch (e) { console.error('Buzz gönderim hatası:', e); }
+      } else {
+        localStorage.setItem('buzzer_room_' + roomCode, JSON.stringify(roomState));
+      }
+    }
+
+    function renderPlayerUI() {
+      const sorted = Object.values(roomState.buzzes || {}).sort((a, b) => a.time - b.time);
+      const myRank = sorted.findIndex(b => b.id === myId);
+      const myScore = roomState.players?.[myId]?.score || 0;
+      document.getElementById('playerDisplayScore').textContent = myScore;
+
+      const btn = document.getElementById('mainBuzzerBtn');
+      const icon = document.getElementById('buzzerIcon');
+      const label = document.getElementById('buzzerLabel');
+      const sub = document.getElementById('buzzerSubLabel');
+      const ring = document.getElementById('buzzerRing');
+
+      if (roomState.locked) {
+        btn.disabled = true;
+        ring.classList.add('hidden');
+        btn.className = 'buzzer-btn relative w-60 h-60 sm:w-68 sm:h-68 rounded-full bg-rose-600 border-8 border-rose-400/30 shadow-2xl flex flex-col items-center justify-center gap-2 text-white';
+        icon.className = 'fa-solid fa-lock text-5xl';
+        label.textContent = 'KİLİTLİ';
+        sub.textContent = 'Hakem butonları kilitledi';
+      } else if (myRank !== -1) {
+        btn.disabled = true;
+        ring.classList.add('hidden');
+        if (myRank === 0) {
+          btn.className = 'buzzer-btn relative w-60 h-60 sm:w-68 sm:h-68 rounded-full bg-amber-500 border-8 border-amber-200/50 shadow-2xl shadow-amber-500/40 flex flex-col items-center justify-center gap-2 text-slate-950';
+          icon.className = 'fa-solid fa-trophy text-5xl';
+          label.textContent = 'İLK SEN BASTIN!';
+          sub.textContent = 'Cevap hakkı sende!';
+        } else {
+          btn.className = 'buzzer-btn relative w-60 h-60 sm:w-68 sm:h-68 rounded-full bg-slate-700 border-8 border-slate-500/30 shadow-xl flex flex-col items-center justify-center gap-2 text-slate-200';
+          icon.className = 'fa-solid fa-medal text-5xl';
+          label.textContent = `${myRank + 1}. SIRADASIN`;
+          sub.textContent = `İlk basan: ${sorted[0].name}`;
+        }
+      } else {
+        btn.disabled = false;
+        ring.classList.remove('hidden');
+        btn.className = 'buzzer-btn relative w-60 h-60 sm:w-68 sm:h-68 rounded-full bg-emerald-500 hover:bg-emerald-400 border-8 border-emerald-200/40 shadow-2xl shadow-emerald-500/40 flex flex-col items-center justify-center gap-2 text-slate-950 cursor-pointer';
+        icon.className = 'fa-solid fa-bolt text-5xl';
+        label.textContent = 'BAS!';
+        sub.textContent = 'Cevabı biliyorsan hemen dokun!';
+      }
+
+      const statusBox = document.getElementById('playerBuzzStatus');
+      if (sorted.length === 0) {
+        statusBox.innerHTML = '<span class="text-slate-500 text-xs">Henüz kimse basmadı.</span>';
+      } else {
+        statusBox.innerHTML = sorted.map((b, i) => `
+          <div class="flex justify-between items-center py-1 text-xs ${i === 0 ? 'text-emerald-400 font-extrabold' : 'text-slate-300'}">
+            <span>${i + 1}. ${b.name}</span>
+            <span>${i === 0 ? 'İLK BASAN' : '+' + Math.max(0, (b.time - sorted[0].time) / 1000).toFixed(2) + ' sn'}</span>
+          </div>
+        `).join('');
+      }
+    }
+
+    function filterQuestions() {
+      const cat = document.getElementById('categorySelect').value;
+      filteredQuestions = cat === 'ALL' ? [...questions] : questions.filter(q => q.cat === cat);
+      if (filteredQuestions.length === 0) filteredQuestions = [...questions];
+      currentQIndex = 0;
+      renderQuestion();
+    }
+
+    function nextQuestion() {
+      currentQIndex = (currentQIndex + 1) % filteredQuestions.length;
+      renderQuestion();
+    }
+
+    function toggleHighlightAnswer() {
+      highlightAnswer = !highlightAnswer;
+      document.getElementById('highlightBtn').innerHTML = highlightAnswer
+        ? '<i class="fa-solid fa-eye"></i> Cevap Açık'
+        : '<i class="fa-solid fa-eye-slash"></i> Cevap Gizli';
+      renderQuestion();
+    }
+
+    function renderQuestion() {
+      const item = filteredQuestions[currentQIndex];
+      if (!item) return;
+      const letters = ['A', 'B', 'C', 'D'];
+      document.getElementById('qCategoryBadge').textContent = item.cat;
+      document.getElementById('qCounterText').textContent = `${currentQIndex + 1} / ${filteredQuestions.length}`;
+      document.getElementById('qText').textContent = item.q;
+
+      const grid = document.getElementById('qOptionsGrid');
+      grid.innerHTML = item.opts.map((opt, idx) => {
+        const isCorrect = idx === item.ans && highlightAnswer;
+        return `
+          <div class="px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+            isCorrect
+              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+              : 'bg-slate-800/80 border-slate-700 text-slate-200'
+          }">
+            <span class="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black ${
+              isCorrect ? 'bg-emerald-500 text-slate-950' : 'bg-slate-700 text-slate-300'
+            }">${letters[idx]}</span>
+            <span>${opt}</span>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('qCorrectText').textContent = highlightAnswer
+        ? `${letters[item.ans]}) ${item.opts[item.ans]}`
+        : 'Gizli';
+    }
+
+    function openSetupModal() {
+      document.getElementById('firebaseUrlInput').value = firebaseUrl;
+      document.getElementById('setupModal').classList.remove('hidden');
+    }
+    function closeSetupModal() { document.getElementById('setupModal').classList.add('hidden'); }
+    function saveFirebaseUrl() {
+      firebaseUrl = document.getElementById('firebaseUrlInput').value.trim();
+      localStorage.setItem('buzzer_firebase_url', firebaseUrl);
+      updateModeUI();
+      closeSetupModal();
+    }
+    function clearFirebaseUrl() {
+      firebaseUrl = '';
+      localStorage.removeItem('buzzer_firebase_url');
+      updateModeUI();
+      closeSetupModal();
+    }
+
+    function openAddQuestionModal() { document.getElementById('addQuestionModal').classList.remove('hidden'); }
+    function closeAddQuestionModal() { document.getElementById('addQuestionModal').classList.add('hidden'); }
+    function saveCustomQuestion() {
+      const q = document.getElementById('newQText').value.trim();
+      const opts = [
+        document.getElementById('optA').value.trim(),
+        document.getElementById('optB').value.trim(),
+        document.getElementById('optC').value.trim(),
+        document.getElementById('optD').value.trim()
+      ];
+      const ans = parseInt(document.getElementById('newQCorrect').value, 10);
+      if (!q || opts.some(o => !o)) return alert('Lütfen soruyu ve tüm 4 şıkkı doldur!');
+      questions.unshift({ cat: 'Özel', q, opts, ans });
+      document.getElementById('categorySelect').value = 'ALL';
+      filterQuestions();
+      closeAddQuestionModal();
+      ['newQText', 'optA', 'optB', 'optC', 'optD'].forEach(id => document.getElementById(id).value = '');
+    }
+
+    function copyRoomCode() {
+      navigator.clipboard?.writeText(roomCode);
+      alert('Oda kodu kopyalandı: ' + roomCode);
+    }
+
+    updateModeUI();
+  </script>
+</body>
+</html>
